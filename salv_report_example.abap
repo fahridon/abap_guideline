@@ -14,11 +14,14 @@ START-OF-SELECTION.
   SELECT * UP TO 25 ROWS INTO TABLE gt_book FROM sbook.
 
   "create salv object for itab
+TRY.
   cl_salv_table=>factory(
     IMPORTING
       r_salv_table   =   go_salv         " Basis Class Simple ALV Tables
     CHANGING
       t_table        = gt_book ).
+CATCH cx_salv_msg.
+ENDTRY.
 
   "set alv reaport header and lines zebra pattern
   DATA lo_display TYPE REF TO cl_salv_display_settings.
