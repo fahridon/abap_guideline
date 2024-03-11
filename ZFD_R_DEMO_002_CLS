@@ -1,0 +1,317 @@
+*&---------------------------------------------------------------------*
+*& Include          ZFD_R_DEMO_002_CLS
+*&---------------------------------------------------------------------*
+
+CLASS lcl_class DEFINITION.
+
+  PUBLIC SECTION.
+
+    METHODS: start_screen,
+      pbo_0100,
+      pai_0100 IMPORTING iv_comm TYPE sy-ucomm,
+      get_data,
+      set_fcat IMPORTING iv_screen TYPE numc1,
+      set_layout,
+      dispay_alv IMPORTING iv_screen TYPE numc1.
+
+ENDCLASS.
+
+CLASS lcl_event_receiver DEFINITION.
+  PUBLIC SECTION.
+
+    METHODS:
+
+      handle_top_of_page
+        FOR EVENT top_of_page OF cl_gui_alv_grid
+        IMPORTING e_dyndoc_id table_index,
+
+      handle_hotspot_click
+        FOR EVENT hotspot_click OF cl_gui_alv_grid
+        IMPORTING e_row_id e_column_id,
+
+      handle_double_click
+        FOR EVENT double_click OF cl_gui_alv_grid
+        IMPORTING e_row e_column es_row_no,
+
+      handle_data_changed
+        FOR EVENT data_changed OF cl_gui_alv_grid
+        IMPORTING er_data_changed e_onf4 e_onf4_before e_onf4_after e_ucomm,
+
+      handle_onf4
+        FOR EVENT onf4 OF cl_gui_alv_grid
+        IMPORTING e_fieldname e_fieldvalue es_row_no er_event_data e_display.
+
+ENDCLASS.
+
+CLASS lcl_class IMPLEMENTATION.
+
+  METHOD start_screen.
+    CALL SCREEN 0100.
+  ENDMETHOD.
+
+  METHOD pbo_0100.
+
+    SET PF-STATUS 'STATUS_0100'.
+
+    go_main->get_data( ).
+
+    go_main->set_fcat( iv_screen = 1  ).
+
+    go_main->set_layout( ).
+
+    go_main->dispay_alv( iv_screen = 1  ).
+
+  ENDMETHOD.
+
+  METHOD pai_0100.
+    CASE iv_comm.
+      WHEN '&BACK'.
+        SET SCREEN 0.
+      WHEN 'EXIT'.
+        SET SCREEN 0.
+      WHEN OTHERS.
+        SET SCREEN 0.
+    ENDCASE.
+  ENDMETHOD.
+
+  METHOD get_data.
+
+    SELECT * INTO CORRESPONDING FIELDS OF TABLE gt_alv_table
+      FROM sflight UP TO 25 ROWS.
+
+  ENDMETHOD.
+
+  METHOD set_fcat.
+
+    IF iv_screen EQ 1.
+
+      CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+        EXPORTING
+*         I_BUFFER_ACTIVE        =
+          i_structure_name       = 'SFLIGHT'
+*         I_CLIENT_NEVER_DISPLAY = 'X'
+*         I_BYPASSING_BUFFER     =
+*         I_INTERNAL_TABNAME     =
+        CHANGING
+          ct_fieldcat            = gt_fcat
+        EXCEPTIONS
+          inconsistent_interface = 1
+          program_error          = 2
+          OTHERS                 = 3.
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+
+      READ TABLE gt_fcat ASSIGNING FIELD-SYMBOL(<fs_fcat>)
+      WITH KEY fieldname = 'FLDATE'.
+      IF sy-subrc EQ 0.
+        <fs_fcat>-edit = abap_true.
+      ENDIF.
+
+    ENDIF.
+
+  ENDMETHOD.
+
+  METHOD set_layout.
+
+    gs_layout-zebra = abap_true.
+    gs_layout-cwidth_opt = abap_true.
+    gs_layout-col_opt = abap_true.
+    gs_layout-sel_mode = 'B'.
+
+  ENDMETHOD.
+
+  METHOD dispay_alv.
+    IF iv_screen EQ 1.
+
+      IF go_grid IS INITIAL.
+
+        CREATE OBJECT go_container
+          EXPORTING
+*           parent                      =                  " Parent container
+            container_name              = 'CC_ALV'         " Name of the Screen CustCtrl Name to Link Container To
+*           style                       =                  " Windows Style Attributes Applied to this Container
+*           lifetime                    = lifetime_default " Lifetime
+*           repid                       =                  " Screen to Which this Container is Linked
+*           dynnr                       =                  " Report To Which this Container is Linked
+*           no_autodef_progid_dynnr     =                  " Don't Autodefined Progid and Dynnr?
+          EXCEPTIONS
+            cntl_error                  = 1                " CNTL_ERROR
+            cntl_system_error           = 2                " CNTL_SYSTEM_ERROR
+            create_error                = 3                " CREATE_ERROR
+            lifetime_error              = 4                " LIFETIME_ERROR
+            lifetime_dynpro_dynpro_link = 5                " LIFETIME_DYNPRO_DYNPRO_LINK
+            OTHERS                      = 6.
+        IF sy-subrc <> 0.
+*         MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*           WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+        ENDIF.
+
+        CREATE OBJECT go_grid
+          EXPORTING
+*           i_shellstyle      = 0                " Control Style
+*           i_lifetime        =                  " Lifetime
+            i_parent          = go_container      " Parent Container
+*           i_appl_events     = space            " Register Events as Application Events
+*           i_parentdbg       =                  " Internal, Do not Use
+*           i_applogparent    =                  " Container for Application Log
+*           i_graphicsparent  =                  " Container for Graphics
+*           i_name            =                  " Name
+*           i_fcat_complete   = space            " Boolean Variable (X=True, Space=False)
+*           o_previous_sral_handler =
+          EXCEPTIONS
+            error_cntl_create = 1                " Error when creating the control
+            error_cntl_init   = 2                " Error While Initializing Control
+            error_cntl_link   = 3                " Error While Linking Control
+            error_dp_create   = 4                " Error While Creating DataProvider Control
+            OTHERS            = 5.
+        IF sy-subrc <> 0.
+*         MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*           WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+        ENDIF.
+
+        DATA: lt_f4 TYPE lvc_t_f4,
+              ls_f4 TYPE lvc_s_f4.
+
+        CLEAR ls_f4.
+        ls_f4-fieldname = 'FLDATE'.
+        ls_f4-register = abap_true.
+        APPEND ls_f4 TO lt_f4.
+
+        CALL METHOD go_grid->register_f4_for_fields
+          EXPORTING
+            it_f4 = lt_f4.                 " F4 Fields
+
+        CREATE OBJECT go_event_receiver.
+
+        SET HANDLER go_event_receiver->handle_data_changed FOR go_grid.
+        SET HANDLER go_event_receiver->handle_onf4 FOR go_grid.
+
+
+
+        go_grid->set_table_for_first_display(
+          EXPORTING
+*    i_buffer_active               =                  " Buffering Active
+*    i_bypassing_buffer            =                  " Switch Off Buffer
+*    i_consistency_check           =                  " Starting Consistency Check for Interface Error Recognition
+*    i_structure_name              =                  " Internal Output Table Structure Name
+*    is_variant                    =                  " Layout
+*    i_save                        =                  " Save Layout
+*    i_default                     = 'X'              " Default Display Variant
+            is_layout                     = gs_layout         " Layout
+*    is_print                      =                  " Print Control
+*    it_special_groups             =                  " Field Groups
+*    it_toolbar_excluding          =                  " Excluded Toolbar Standard Functions
+*    it_hyperlink                  =                  " Hyperlinks
+*    it_alv_graphics               =                  " Table of Structure DTC_S_TC
+*    it_except_qinfo               =                  " Table for Exception Quickinfo
+*    ir_salv_adapter               =                  " Interface ALV Adapter
+          CHANGING
+            it_outtab                     = gt_alv_table      " Output Table
+            it_fieldcatalog               = gt_fcat           " Field Catalog
+*    it_sort                       =                  " Sort Criteria
+*    it_filter                     =                  " Filter Criteria
+          EXCEPTIONS
+            invalid_parameter_combination = 1                " Wrong Parameter
+            program_error                 = 2                " Program Errors
+            too_many_lines                = 3                " Too many Rows in Ready for Input Grid
+            OTHERS                        = 4
+        ).
+        IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*   WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+        ENDIF.
+
+        CALL METHOD go_grid->register_edit_event
+          EXPORTING
+            i_event_id = cl_gui_alv_grid=>mc_evt_modified                 " Event ID
+          EXCEPTIONS
+            error      = 1                " Error
+            OTHERS     = 2.
+        IF sy-subrc <> 0.
+*         MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*           WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+        ENDIF.
+
+      ELSE.
+        CALL METHOD go_grid->refresh_table_display.
+      ENDIF.
+
+    ENDIF.
+
+  ENDMETHOD.
+
+ENDCLASS.
+CLASS lcl_event_receiver IMPLEMENTATION.
+
+  METHOD handle_top_of_page.
+    BREAK-POINT.
+  ENDMETHOD.
+
+  METHOD handle_hotspot_click.
+    BREAK-POINT.
+  ENDMETHOD.
+
+  METHOD handle_double_click.
+    BREAK-POINT.
+  ENDMETHOD.
+
+  METHOD handle_data_changed.
+    LOOP AT er_data_changed->mt_good_cells INTO DATA(ls_cells).
+      IF ls_cells-fieldname EQ 'FLDATE'.
+        READ TABLE gt_alv_table INTO gs_alv_table
+        INDEX ls_cells-row_id.
+        IF sy-subrc EQ 0.
+*          DATA(lv_mess) = |Eski değer:| & |{ gs_alv_table-fldate }| & |yeni değer:| & |{ ls_cells-value }|.
+*          MESSAGE lv_mess TYPE 'I'.
+*          gs_alv_table-fldate = '20240417'.
+*          MODIFY gt_alv_table FROM gs_alv_table INDEX ls_cells-row_id.
+*
+*          CALL METHOD go_grid->refresh_table_display
+*            EXCEPTIONS
+*              finished = 1
+*              OTHERS   = 2.
+*          IF sy-subrc <> 0.
+*            MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*                       WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+*          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD handle_onf4.
+    READ TABLE gt_alv_table ASSIGNING FIELD-SYMBOL(<fc_sec>) INDEX es_row_no-row_id.
+    IF sy-subrc EQ 0.
+      CALL FUNCTION 'F4_DATE'
+        EXPORTING
+          date_for_first_month         = sy-datum
+*         DISPLAY                      = ' '
+          factory_calendar_id          = 'TR'
+*         GREGORIAN_CALENDAR_FLAG      = ' '
+          holiday_calendar_id          = 'TR'
+*         PROGNAME_FOR_FIRST_MONTH     = ' '
+*         DATE_POSITION                = ' '
+        IMPORTING
+          select_date                  = <fc_sec>-fldate
+*         SELECT_WEEK                  =
+*         SELECT_WEEK_BEGIN            =
+*         SELECT_WEEK_END              =
+        EXCEPTIONS
+          calendar_buffer_not_loadable = 1
+          date_after_range             = 2
+          date_before_range            = 3
+          date_invalid                 = 4
+          factory_calendar_not_found   = 5
+          holiday_calendar_not_found   = 6
+          parameter_conflict           = 7
+          OTHERS                       = 8.
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+
+      CALL METHOD go_grid->refresh_table_display.
+
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
